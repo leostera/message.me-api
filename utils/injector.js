@@ -1,22 +1,19 @@
-var util = require('util')
-  , _ = require('lodash')
+var util = require('util');
 
 var registry = exports.registry = {};
 
 var getParams = function (fn) {
   var params = [];
-  var fnStr = fn.toString();
   /* this regexes originally from the angular source */
   var FN_ARGS = /^function\s*[^\(]*\(\s*([^\)]*)\)/m;
   var FN_ARG_SPLIT = /,/;
   var FN_ARG = /^\s*(_?)(.+?)\1\s*$/;
   var STRIP_COMMENTS = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/mg;
-  var fnText = fnStr.replace(STRIP_COMMENTS, '');
+  var fnText = fn.toString().replace(STRIP_COMMENTS, '');
   var argDecl = fnText.match(FN_ARGS);
   argDecl[1].split(FN_ARG_SPLIT).forEach(function (arg){
     params.push(arg.trim())
   });
-
   return params;
 }
 
@@ -40,10 +37,8 @@ var inject = exports.inject = function (fn) {
   }
 
   var deps = params.map(function (param) {
-    return registry[param];
-  }).map(function (dep) {
-    return inject(dep);
-  })
+    return inject(registry[param]);
+  });
 
   switch (deps.length) {
     case 1: return fn(deps[0]);

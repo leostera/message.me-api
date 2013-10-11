@@ -15,6 +15,9 @@
     "awssum-amazon-sns": "~1.0.0",
     "nconf": "~0.6.7",
     "lodash": "~2.2.1",
-    "underscore.string": "~2.3.3"
+    "underscore.string": "~2.3.3",
+    "connect-redis": "~1.4.5",
+    "passport": "~0.1.17",
+    "passport-facebook": "~1.0.1"
   }
 }

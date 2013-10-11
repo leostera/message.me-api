@@ -7,7 +7,9 @@ var userSchema = mongoose.Schema({
       message: mongoose.Schema.Types.ObjectId,
     }],
     username: String,
-    facebook: String
+    email: String,
+    facebook: String,
+    facebook_meta: Object
 });
 
 module.exports = mongoose.model('User', userSchema)
