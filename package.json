@@ -1,0 +1,20 @@
+{
+  "name": "application-name",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "express": "3.3.5",
+    "mongoose": "~3.6.20",
+    "socket.io": "~0.9.16",
+    "awssum-amazon-sqs": "~1.0.0",
+    "awssum": "~1.1.1",
+    "awssum-amazon": "~1.1.1",
+    "awssum-amazon-sns": "~1.0.0",
+    "nconf": "~0.6.7",
+    "lodash": "~2.2.1",
+    "underscore.string": "~2.3.3"
+  }
+}
