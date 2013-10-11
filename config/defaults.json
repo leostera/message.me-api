@@ -1,0 +1,37 @@
+{
+  "server": {
+    "port": 8080
+  },
+
+  "aws": {
+    "key": "AKIAJ2PSLM6XN7Y4NYEQ",
+    "secret": "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"
+  },
+
+  "auth": {
+    "facebook": {
+      "key": "435065866602908",
+      "secret": "5e3fe5d7c283343a97dca4b9598d661f"
+    }
+  },
+
+  "db": {
+    "host": "",
+    "user": "",
+    "password": "",
+    "db": ""
+  },
+
+  "session": {
+    "secret": "this_is_some_string!2112@",
+    "store": {
+      "host": "",
+      "port": "6379",
+      "prefix": {
+        "str": "gh_",
+        "use_env": true
+      },
+      "key": ""
+    }
+  }
+}
