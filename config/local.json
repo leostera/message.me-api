@@ -1,3 +1,7 @@
 {
-  
+  "server": {
+    "port": 8080,
+    "appUrl": "localhost:9000",
+    "apiUrl": "localhost"
+  }
 }

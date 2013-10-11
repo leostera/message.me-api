@@ -1,6 +1,8 @@
 {
   "server": {
-    "port": 8080
+    "port": 8080,
+    "appUrl": "halo.leostera.com",
+    "apiUrl": "halo_api.leostera.com"
   },
 
   "aws": {
@@ -10,7 +12,7 @@
 
   "auth": {
     "facebook": {
-      "key": "435065866602908",
+      "id": "435065866602908",
       "secret": "5e3fe5d7c283343a97dca4b9598d661f"
     }
   },
@@ -28,8 +30,8 @@
       "host": "",
       "port": "6379",
       "prefix": {
-        "str": "gh_",
-        "use_env": true
+        "text": "gh_",
+        "useEnv": true
       },
       "key": ""
     }
