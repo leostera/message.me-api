@@ -19,13 +19,14 @@
 
   "db": {
     "host": "",
+    "port": "",
     "user": "",
     "password": "",
-    "db": ""
+    "dbname": ""
   },
 
   "session": {
-    "secret": "this_is_some_string!2112@",
+    "secret": "",
     "store": {
       "host": "",
       "port": "6379",
