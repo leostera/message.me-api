@@ -5,13 +5,8 @@ var passport = require('passport');
 exports.register = function(app){
   app.get('injector').inject(
   function (Config, UserController, MessageController) {
-    app.get('/auth/facebook', passport.authenticate('facebook'));
-    app.get('/auth/facebook/callback', 
-      passport.authenticate('facebook', { failureRedirect: Config.appURL+'/login' }),
-      function (req, res) {
-        res.redirect(Config.appURL);
-      });
-
-    app.get('/user/session', UserController.isLoggedIn, UserController.session);
+    app.post('/auth/facebook',  UserController.authenticate);
+    app.get('/users/session', UserController.isLoggedIn, UserController.session);
+    app.post('/users/login', UserController.login);
   });
 };
