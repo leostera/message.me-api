@@ -9,6 +9,7 @@ var express = require('express')
   , mongoose = require('mongoose')
   , passport = require('passport');
 
+
 /**
  * App setup
  */
@@ -18,8 +19,17 @@ var config = require('./config')
   , injector = require('./utils/injector')
   , app = express();
 
+mongoose.connect('mongodb://'
+  + config.db.user
+  + ((config.db.password) ? ':'+config.db.password : '')
+  + ((config.db.user) ? '@' : '')
+  + config.db.host
+  + ":"+config.db.port
+  + "/"+config.db.dbname);
+
 injector.load([
-      models
+      {wrapAs: 'mongoose', obj: mongoose}
+    , models
     , controllers
     , {wrapAs: "Config", obj: config}
   ]);
@@ -50,6 +60,7 @@ app.use(function (req, res, next) {
 var RedisStore = require('connect-redis')(express);
 var redis = config.session.store;
 app.use(express.logger('dev'));
+app.use(express.cookieParser());
 app.use(express.session({
     secret: config.session.secret
   , cookie: { secure: false, maxAge: 86400000 }
