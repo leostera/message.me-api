@@ -65,8 +65,18 @@ module.exports = function (UserModel, Config) {
     login: function (req, res) {
     },
 
+    logout: function (req, res) {
+      req.session.user = undefined;
+      req.session.save();
+      res.send(200);
+    },
+
     session: function (req, res) {
-      res.send(200, req.session.user);
+      if(req.session.user) {
+        res.send(200, req.session.user);
+      } else {
+        res.send(403, {error: 'No user logged in'});
+      }
     }
 
   }
