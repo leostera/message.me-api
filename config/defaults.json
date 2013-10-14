@@ -5,6 +5,14 @@
     "apiUrl": "halo_api.leostera.com"
   },
 
+  "sockets": {
+    "store": {
+      "host": "",
+      "port": "6379",
+      "key": ""
+    }
+  },
+
   "aws": {
     "key": "AKIAJ2PSLM6XN7Y4NYEQ",
     "secret": "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"

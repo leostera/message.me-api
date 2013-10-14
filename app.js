@@ -7,7 +7,9 @@ var http = require('http')
 
 var express = require('express')
   , mongoose = require('mongoose')
-  , passport = require('passport');
+  , passport = require('passport')
+  , redis = require('redis')
+  , ws = require('ws');
 
 
 /**
@@ -58,25 +60,29 @@ app.use(function (req, res, next) {
 });
 
 var RedisStore = require('connect-redis')(express);
-var redis = config.session.store;
+var store = new RedisStore({
+    host: config.session.store.host
+  , port: config.session.store.port
+  , prefix: config.session.store.prefix.text
+      +(  config.session.store.prefix.useEnv
+        ? "_"+process.env.NODE_ENV
+        : '')
+  , password: config.session.store.key
+});
+
 app.use(express.logger('dev'));
 app.use(express.cookieParser());
 app.use(express.session({
     secret: config.session.secret
   , cookie: { secure: false, maxAge: 86400000 }
-  , store: new RedisStore({
-      host: redis.host
-    , port: redis.port
-    , prefix: (redis.prefix.useEnv ? process.env.NODE_ENV+"_" : '')+redis.prefix.text
-    , password: redis.key
-    })
+  , store: store
 }));
 app.use(passport.initialize());
 app.use(passport.session());
 app.use(express.bodyParser());
 app.use(express.methodOverride());
 app.use(app.router);
-app.use(function( err, req, res, next ) {
+app.use(function (err, req, res, next) {
   res.json(501, {
     error: err.toString()
   });
@@ -90,6 +96,49 @@ if ('dev' == app.get('env')) {
 var routes = require('./routes');
 routes.register(app);
 
-http.createServer(app).listen(app.get('port'), function(){
+var server = http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
 });
+
+var io = new ws.Server({server: server});
+app.set('io', io);
+io.on('connection', function (ws) {
+  var wsSession;
+
+  express.cookieParser(config.session.secret)(ws.upgradeReq, null, function(err) {
+    var sessionID = ws.upgradeReq.signedCookies['connect.sid'];
+    store.get(sessionID, function (err, session) {
+      wsSession = session || false;
+      if(wsSession && wsSession.user) {
+        var obj = {
+            username: wsSession.user.username || wsSession.user.name
+          , status: true
+        };
+        io.clients.forEach(function (client) {
+          // if(client === ws) return;
+          client.send(JSON.stringify({
+            label: 'user:connect',
+            data: JSON.stringify(obj)
+          }));
+        });
+      }
+    });
+  });
+
+  ws.on('close', function() {
+    if(wsSession && wsSession.user) {
+      var obj = {
+          username: wsSession.user.username || wsSession.user.name
+        , status: false
+      };
+      io.clients.forEach(function (client) {
+        if(client === ws) return;
+        client.send(JSON.stringify({
+          label: 'user:disconnect',
+          data: JSON.stringify(obj)
+        }));
+      });
+    }
+  });
+});
+

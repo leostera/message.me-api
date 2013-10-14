@@ -8,7 +8,6 @@
   "dependencies": {
     "express": "3.3.5",
     "mongoose": "~3.6.20",
-    "socket.io": "~0.9.16",
     "awssum": "~1.1.1",
     "awssum-amazon": "~1.1.1",
     "awssum-amazon-sqs": "~1.0.0",
@@ -18,6 +17,8 @@
     "underscore.string": "~2.3.3",
     "connect-redis": "~1.4.5",
     "passport": "~0.1.17",
-    "passport-facebook-token": "~0.1.4"
+    "passport-facebook-token": "~0.1.4",
+    "redis": "~0.8.6",
+    "ws": "~0.4.31"
   }
 }

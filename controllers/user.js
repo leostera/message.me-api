@@ -7,12 +7,10 @@ var passport = require('passport')
 module.exports = function (UserModel, Config) {
 
   passport.serializeUser(function (user, done) {
-    console.log("Serializing user", id);
     done(null, user._id);
   });
 
   passport.deserializeUser(function (id, done) {
-    console.log("Deserializing user", id);
     UserModel.findById(id, function (err, user) {
       done(err, user);
     });
@@ -25,7 +23,8 @@ module.exports = function (UserModel, Config) {
     UserModel.update(
       { facebook: profile.id }
     , { facebook: profile.id
-      , username: profile.username
+      , username: profile.username ? profile.username : ''
+      , name: profile.name
       , email: profile._json.email
       , refresh_token: refreshToken
     }, { upsert: true }
@@ -44,7 +43,6 @@ module.exports = function (UserModel, Config) {
   return {
     authenticate: function (req, res, next) {
       passport.authenticate('facebook-token',function (err, user, info) {
-        console.log(err, user, info);
         if(err) return res.json(500, err);
         if(!user) return res.json(500, {message: 'No user.'});
         req.session.user = user;
@@ -57,9 +55,7 @@ module.exports = function (UserModel, Config) {
       if(req.session && req.session.user) {
         return next();
       }
-      setTimeout(function () {
-        res.json(403, {error: "Uhm, you're not logged in."});
-      },200);
+      res.json(403, {error: "Uhm, you're not logged in."});
     },
 
     login: function (req, res) {
