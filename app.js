@@ -11,7 +11,6 @@ var express = require('express')
   , redis = require('redis')
   , ws = require('ws');
 
-
 /**
  * App setup
  */
@@ -35,8 +34,15 @@ var amazonSQS = require('awssum-amazon-sqs').Sqs
 var aws = require('aws-sdk');
 aws.config.update(config.aws);
 
+// WebSockets server
+// we're gonna load it so we can use it elsewhere
+var io;
+
 injector.load([
-      {wrapAs: 'SQS', obj: new aws.SQS() }
+      {wrapAs: 'io', obj: io}
+    , {wrapAs: 'q', obj: require('q')}
+    , {wrapAs: 'async', obj: require('async')}
+    , {wrapAs: 'SQS', obj: new aws.SQS() }
     // , {wrapAs: 'SNS', obj: SNS) }
     , {wrapAs: 'mongoose', obj: mongoose}
     , models
@@ -108,22 +114,26 @@ var server = http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
 });
 
-var io = new ws.Server({server: server});
+io = new ws.Server({server: server});
 app.set('io', io);
 io.on('connection', function (ws) {
-  var wsSession;
+  ws.session = false;
 
   express.cookieParser(config.session.secret)(ws.upgradeReq, null, function(err) {
     var sessionID = ws.upgradeReq.signedCookies['connect.sid'];
     store.get(sessionID, function (err, session) {
-      wsSession = session || false;
-      if(wsSession && wsSession.user) {
+      ws.session = session || false;
+      if(ws.session && ws.session.user) {
         var obj = {
-            username: wsSession.user.username || wsSession.user.name
+            username: ws.session.user.username || ws.session.user.name
           , status: true
         };
         io.clients.forEach(function (client) {
-          if(client === ws) return;
+          console.log("Number");
+          if(client === ws) {
+            console.log("No sending to me.", client.session.user._id, ws.session.user._id);
+            return;
+          }
           client.send(JSON.stringify({
             label: 'user:connect',
             data: JSON.stringify(obj)
@@ -135,30 +145,48 @@ io.on('connection', function (ws) {
 
   ws.on('message', function (msg) {
     msg = JSON.parse(msg);
-    console.log(msg)
     if(msg.label === 'user:online') {
-      var obj = {
-          username: wsSession.user.username || wsSession.user.name
-        , status: true
-      };
       io.clients.forEach(function (client) {
-        // if(client === ws) return;
-        client.send(JSON.stringify({
-          label: 'user:connect',
-          data: JSON.stringify(obj)
-        }));
+        if(client === ws) {
+          console.log("No sending to me.", client.session.user._id, ws.session.user._id);
+          return;
+        }
+        if(client.session && client.session.user
+          && client.session.user.username) {
+            var obj = {
+              username: client.session.user.username,
+              status: true
+            };
+            ws.send(JSON.stringify({
+              label: 'user:connect',
+              data: JSON.stringify(obj)
+            }));
+        }
       });
     }
   })
 
   ws.on('close', function() {
-    if(wsSession && wsSession.user) {
-      var obj = {
-          username: wsSession.user.username || wsSession.user.name
-        , status: false
-      };
+    if(ws.session && ws.session.user) {
+      var username
+        , obj;
+
+      if(ws.session.user) {
+        username = ws.session.user.username || ws.session.user.name;
+        obj = {
+          username: username,
+          status: false
+        };
+      }
+
+      if(!obj) return;
+      console.log("Broadcasting disconnect...");
       io.clients.forEach(function (client) {
-        if(client === ws) return;
+        console.log("Number");
+        if(client === ws) {
+            console.log("No sending to me.", client.session.user._id, ws.session.user._id);
+            return;
+          }
         client.send(JSON.stringify({
           label: 'user:disconnect',
           data: JSON.stringify(obj)
