@@ -14,5 +14,6 @@ exports.register = function(app){
     app.post('/users/login', UserController.login);
 
     // Message endpoints
+    app.post('/messages', UserController.isLoggedIn, MessageController.send);
   });
 };
