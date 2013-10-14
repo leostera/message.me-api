@@ -1,22 +1,24 @@
-var mongoose = require('mongoose');
+var messageModel;
 
-exports.schema = messageSchema = mongoose.Schema({
-    text: {
-      type: String,
-      required: true
-    },
-    from: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true
-    },
-    to: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true
-    },
-    read: {
-      type: Boolean,
-      default: false
-    }
-})
+module.exports = function (mongoose) {
 
-module.exports = mongoose.model('Message', messageSchema)
+  var messageSchema = mongoose.Schema({
+      text: {
+        type: String,
+        required: true
+      },
+      read: {
+        type: Boolean,
+        default: false
+      },
+      meta: {}
+  });
+
+  messageModel = messageModel
+    || mongoose.model('Message', messageSchema);
+
+  return {
+    model: messageModel,
+    schema: messageSchema
+  };
+}

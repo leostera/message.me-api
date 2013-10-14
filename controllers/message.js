@@ -1,16 +1,41 @@
+var q = require('q');
 /**
  * User Routes
  * @type {Object}
  */
-module.exports = function (async, q, io, MessageModel, Config) {
+module.exports = function (_, async, SQS, ConversationModel, UserModel, MessageModel, Config) {
 
-  var findUser = function (username) {
-    var deferred = q.defer();
-    io.clients().forEach(function (client) {
-      console.log(client);
-    });
-    return deferred.promise;
-  };
+  var saveMessage = function (message, user, conversation) {
+    return function (meta, done) {
+      var msg = new MessageModel.model();
+      msg.text = message;
+      msg.meta = meta;
+      conversation.messages.push(msg);
+      conversation.save(function (err) {
+        if(err) {
+          done(err)
+        } else {
+          done(null, conversation);
+        }
+      });
+    }
+  }
+
+  var queueMessage = function (message, user) {
+    return function (done) {
+      SQS.getQueueUrl({
+        QueueName: Config.aws.queuePrefix+user._id
+      }, function (err, data) {
+        SQS.sendMessage({
+          QueueUrl: data.QueueUrl,
+          MessageBody: message,
+          DelaySeconds: 5
+        }, function (err, data) {
+          done(err, data);
+        })
+      });
+    }
+  }
 
   return {
     send: function (req, res) {
@@ -29,18 +54,22 @@ module.exports = function (async, q, io, MessageModel, Config) {
       var tasks = [];
 
       req.body.to.forEach(function (user) {
-        tasks.push(function (done) {
-          findUser(user)
-            .then(function (status) {
-              // in parallel:
-              // - save the message
-              // - send the message
-            }, function (error) {
-              // in parallel:
-              // - push the message to the queue
-              // - save the message
-            });
-        })
+        tasks.push(function (cb) {
+          UserModel.findOne({username: user}, function (err, user) {
+            if(err || !user) {
+              cb(err);
+            }
+            var conversation = new ConversationModel();
+            conversation.from = req.session.user._id;
+            conversation.to = user._id;
+            async.waterfall([
+                queueMessage(req.body.text, user)
+              , saveMessage(req.body.text, user, conversation)
+              ], function (err, result) {
+                cb(err, result);
+              });
+          });
+        });
       });
 
       async.parallel(tasks, function (err, messages) {

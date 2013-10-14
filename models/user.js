@@ -1,3 +1,5 @@
+var userModel;
+
 module.exports = function (mongoose) {
 
   var userSchema = mongoose.Schema({
@@ -12,5 +14,7 @@ module.exports = function (mongoose) {
       facebook_meta: Object
   });
 
-  return mongoose.model('User', userSchema);
+  userModel = userModel || mongoose.model('User', userSchema);
+
+  return userModel;
 }

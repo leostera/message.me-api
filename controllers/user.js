@@ -46,7 +46,7 @@ module.exports = function (SQS, UserModel, Config) {
       user = JSON.parse(JSON.stringify(user));
       if(user) {
         console.log("Got user!", user);
-        var queueName = "gh_inbox__"+user._id;
+        var queueName = Config.aws.queuePrefix+user._id;
         SQS.getQueueUrl({
           QueueName: queueName
         }, function (err, data) {
@@ -74,7 +74,7 @@ module.exports = function (SQS, UserModel, Config) {
         console.log("No user!");
         console.log("Creating queue for new user...");
         upsertUser(accessToken, refreshToken, profile, function (err, user) {
-          var queueName = "gh_inbox__"+user._id;
+          var queueName = Config.aws.queuePrefix+user._id;
           SQS.createQueue({
             QueueName: queueName
           }, function (err, data) {

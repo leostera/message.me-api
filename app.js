@@ -28,11 +28,13 @@ mongoose.connect('mongodb://'
   + ":"+config.db.port
   + "/"+config.db.dbname);
 
-var amazonSQS = require('awssum-amazon-sqs').Sqs
-  , amazonSNS = require('awssum-amazon-sns').Sns;
-
 var aws = require('aws-sdk');
 aws.config.update(config.aws);
+var SQS = new aws.SQS();
+
+var q = require('q')
+  , async = require('async')
+  , _ = require('lodash');
 
 // WebSockets server
 // we're gonna load it so we can use it elsewhere
@@ -40,10 +42,10 @@ var io;
 
 injector.load([
       {wrapAs: 'io', obj: io}
-    , {wrapAs: 'q', obj: require('q')}
-    , {wrapAs: 'async', obj: require('async')}
-    , {wrapAs: 'SQS', obj: new aws.SQS() }
-    // , {wrapAs: 'SNS', obj: SNS) }
+    , {wrapAs: 'async', obj: async}
+    , {wrapAs: '_', obj: _}
+    , {wrapAs: 'SQS', obj: SQS }
+    , {wrapAs: 'SNS', obj: new aws.SNS() }
     , {wrapAs: 'mongoose', obj: mongoose}
     , models
     , controllers
@@ -124,6 +126,25 @@ io.on('connection', function (ws) {
     store.get(sessionID, function (err, session) {
       ws.session = session || false;
       if(ws.session && ws.session.user) {
+        var cw = new aws.CloudWatch();
+
+        cw.putMetricAlarm({
+          AlarmName: config.aws.alarmPrefix+ws.session.user._id,
+          MetricName: "ApproximateNumberOfMessagesVisible",
+          Namespace: config.aws.queuePrefix+ws.session.user._id,
+          Statistic: "Count",
+          Period: 1,
+          EvaluationPeriods: 2,
+          Threshold: 1,
+          ComparisonOperator: "GreaterThanOrEqualToThreshold"
+        }, function (err, data) {
+          ws.send(JSON.stringify({
+            label: 'message:new',
+            err: err,
+            data: data
+          }));
+        });
+
         var obj = {
             username: ws.session.user.username || ws.session.user.name
           , status: true

@@ -1,17 +1,21 @@
-var mongoose = require('mongoose');
+var conversationModel;
 
-var Message = require('./message').schema;
+module.exports = function (mongoose, MessageModel) {
 
-var conversationSchema = mongoose.Schema({
-    messages: [Message],
-    from: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true
-    },
-    to: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true
-    }
-});
+  var conversationSchema = mongoose.Schema({
+      messages: [MessageModel.schema],
+      from: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: true
+      },
+      to: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: true
+      }
+  });
 
-module.exports = mongoose.model('Conversation', conversationSchema)
+  conversationModel = conversationModel
+    || mongoose.model('Conversation', conversationSchema);
+
+  return conversationModel;
+}
