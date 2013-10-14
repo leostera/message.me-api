@@ -123,7 +123,7 @@ io.on('connection', function (ws) {
           , status: true
         };
         io.clients.forEach(function (client) {
-          // if(client === ws) return;
+          if(client === ws) return;
           client.send(JSON.stringify({
             label: 'user:connect',
             data: JSON.stringify(obj)
@@ -132,6 +132,24 @@ io.on('connection', function (ws) {
       }
     });
   });
+
+  ws.on('message', function (msg) {
+    msg = JSON.parse(msg);
+    console.log(msg)
+    if(msg.label === 'user:online') {
+      var obj = {
+          username: wsSession.user.username || wsSession.user.name
+        , status: true
+      };
+      io.clients.forEach(function (client) {
+        // if(client === ws) return;
+        client.send(JSON.stringify({
+          label: 'user:connect',
+          data: JSON.stringify(obj)
+        }));
+      });
+    }
+  })
 
   ws.on('close', function() {
     if(wsSession && wsSession.user) {
