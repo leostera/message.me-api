@@ -73,15 +73,18 @@ module.exports = function (SQS, UserModel, Config) {
       } else {
         console.log("No user!");
         console.log("Creating queue for new user...");
-        SQS.createQueue({
-          QueueName: queueName
-        }, function (err, data) {
-          if (err) {
-            done(err, null);
-          } else {
-            console.log("Got new queue");
-            upsertUser(accessToken, refreshToken, profile, done);
-          }
+        upsertUser(accessToken, refreshToken, profile, function (err, user) {
+          var queueName = "gh_inbox__"+user._id;
+          SQS.createQueue({
+            QueueName: queueName
+          }, function (err, data) {
+            if (err) {
+              done(err, null);
+            } else {
+              console.log("Got new queue");
+              done(err, user);
+            }
+          });
         });
       }
     });
