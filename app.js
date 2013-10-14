@@ -29,8 +29,16 @@ mongoose.connect('mongodb://'
   + ":"+config.db.port
   + "/"+config.db.dbname);
 
+var amazonSQS = require('awssum-amazon-sqs').Sqs
+  , amazonSNS = require('awssum-amazon-sns').Sns;
+
+var aws = require('aws-sdk');
+aws.config.update(config.aws);
+
 injector.load([
-      {wrapAs: 'mongoose', obj: mongoose}
+      {wrapAs: 'SQS', obj: new aws.SQS() }
+    // , {wrapAs: 'SNS', obj: SNS) }
+    , {wrapAs: 'mongoose', obj: mongoose}
     , models
     , controllers
     , {wrapAs: "Config", obj: config}

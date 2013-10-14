@@ -8,10 +8,6 @@
   "dependencies": {
     "express": "3.3.5",
     "mongoose": "~3.6.20",
-    "awssum": "~1.1.1",
-    "awssum-amazon": "~1.1.1",
-    "awssum-amazon-sqs": "~1.0.0",
-    "awssum-amazon-sns": "~1.0.0",
     "nconf": "~0.6.7",
     "lodash": "~2.2.1",
     "underscore.string": "~2.3.3",
@@ -19,6 +15,8 @@
     "passport": "~0.1.17",
     "passport-facebook-token": "~0.1.4",
     "redis": "~0.8.6",
-    "ws": "~0.4.31"
+    "ws": "~0.4.31",
+    "aws-sdk": "~1.8.1",
+    "async": "~0.2.9"
   }
 }

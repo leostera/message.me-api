@@ -14,8 +14,10 @@
   },
 
   "aws": {
-    "key": "AKIAJ2PSLM6XN7Y4NYEQ",
-    "secret": "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"
+    "accessKeyId": "AKIAJ2PSLM6XN7Y4NYEQ",
+    "secretAccessKey": "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",
+    "region": "us-east-1",
+    "awsAccountId": ""
   },
 
   "auth": {

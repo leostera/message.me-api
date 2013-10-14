@@ -5,8 +5,8 @@
 module.exports = function (MessageModel, Config) {
 
   return {
-    inbox: function (req, res) {
-      res.json(501);
+    send: function (req, res) {
+      
     }
   }
 }

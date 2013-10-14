@@ -4,7 +4,28 @@ var passport = require('passport')
  * User Routes
  * @type {Object}
  */
-module.exports = function (UserModel, Config) {
+module.exports = function (SQS, UserModel, Config) {
+  var upsertUser = function (accessToken, refreshToken, profile, done) {
+    UserModel.update(
+      { facebook: profile.id }
+    , { facebook: profile.id
+      , username: profile.username ? profile.username : ''
+      , name: profile.name
+      , email: profile._json.email
+      , refresh_token: refreshToken
+      , access_token: accessToken
+    }, { upsert: true }
+    , function (err, rows, raw) {
+      if(!err) {
+        UserModel.findOne({facebook: profile.id}, function (err, user) {
+          user = JSON.parse(JSON.stringify(user));
+          done(err, user);
+        })
+      } else {
+        done(err, null);
+      }
+    });
+  };
 
   passport.serializeUser(function (user, done) {
     done(null, user._id);
@@ -20,22 +41,48 @@ module.exports = function (UserModel, Config) {
     clientID: Config.auth.facebook.id,
     clientSecret: Config.auth.facebook.secret
   }, function (accessToken, refreshToken, profile, done) {
-    UserModel.update(
-      { facebook: profile.id }
-    , { facebook: profile.id
-      , username: profile.username ? profile.username : ''
-      , name: profile.name
-      , email: profile._json.email
-      , refresh_token: refreshToken
-    }, { upsert: true }
-    , function (err, rows, raw) {
-      if(!err) {
-        UserModel.findOne({facebook: profile.id}, function (err, user) {
-          user = JSON.parse(JSON.stringify(user));
-          done(err, user);
-        })
+    UserModel.findOne({facebook: profile.id}, function (err, user) {
+      console.log("Finding user...");
+      user = JSON.parse(JSON.stringify(user));
+      if(user) {
+        console.log("Got user!", user);
+        var queueName = "gh_inbox__"+user._id;
+        SQS.getQueueUrl({
+          QueueName: queueName
+        }, function (err, data) {
+          console.log("Finding queue...");
+          if(err) {
+            console.log("Finding queue:ERROR", err);
+            console.log("Creating queue...", queueName);
+            SQS.createQueue({
+              QueueName: queueName
+            }, function (err, data) {
+              if (err) {
+                console.log("Creating queue:ERROR", err);
+                done(err, null);
+              } else {
+                console.log("Got new queue!", data);
+                upsertUser(accessToken, refreshToken, profile, done);
+              }
+            })
+          } else {
+            console.log("Got queue!", data);
+            upsertUser(accessToken, refreshToken, profile, done);
+          }
+        });
       } else {
-        done(err, null);
+        console.log("No user!");
+        console.log("Creating queue for new user...");
+        SQS.createQueue({
+          QueueName: queueName
+        }, function (err, data) {
+          if (err) {
+            done(err, null);
+          } else {
+            console.log("Got new queue");
+            upsertUser(accessToken, refreshToken, profile, done);
+          }
+        });
       }
     });
   }));
