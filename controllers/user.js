@@ -95,6 +95,7 @@ module.exports = function (SQS, UserModel, Config) {
       passport.authenticate('facebook-token',function (err, user, info) {
         if(err) return res.json(500, err);
         if(!user) return res.json(500, {message: 'No user.'});
+        if(!req.session) return res.json(500, {message: 'No session!?'});
         req.session.user = user;
         req.session.save();
         res.json(200, user);

@@ -152,7 +152,6 @@ io.on('connection', function (ws) {
         io.clients.forEach(function (client) {
           console.log("Number");
           if(client === ws) {
-            console.log("No sending to me.", client.session.user._id, ws.session.user._id);
             return;
           }
           client.send(JSON.stringify({
@@ -169,7 +168,6 @@ io.on('connection', function (ws) {
     if(msg.label === 'user:online') {
       io.clients.forEach(function (client) {
         if(client === ws) {
-          console.log("No sending to me.", client.session.user._id, ws.session.user._id);
           return;
         }
         if(client.session && client.session.user
@@ -205,7 +203,6 @@ io.on('connection', function (ws) {
       io.clients.forEach(function (client) {
         console.log("Number");
         if(client === ws) {
-            console.log("No sending to me.", client.session.user._id, ws.session.user._id);
             return;
           }
         client.send(JSON.stringify({
