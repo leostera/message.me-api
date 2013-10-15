@@ -1,3 +1,4 @@
 public
 .git
 node_modules
+*.rdb
