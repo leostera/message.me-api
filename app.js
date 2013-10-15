@@ -135,6 +135,14 @@ io.broadcast = function(data) {
   }, function () {});
 };
 
+io.sendTo = function (data, user) {
+  async.each(this.clients, function (client) {
+    client.readyState === 1 && client.session
+      && client.session.user._id === user._id
+      && client.send(JSON.stringify(data));
+  }, function () {});
+}
+
 ioStore = createRedisIOClient();
 pub = createRedisIOClient();
 sub = createRedisIOClient();
@@ -151,10 +159,21 @@ sub.on('message', function (channel, message) {
       data: message
     });
   } else if (channel === 'users:disconnect') {
+    console.log(channel, message);
     io.broadcast({
       label: 'users:disconnect',
       data: message
     })
+  } else if(channel === 'users:online') {
+    ioStore.smembers('users_online', function (err, users) {
+      users = users.map(function (u) {
+        return JSON.parse(u);
+      });
+      io.sendTo({
+        label: 'users:online',
+        data: users
+      }, JSON.parse(message));
+    });
   }
 });
 
@@ -167,21 +186,7 @@ io.on('connection', function (ws) {
 
   ws.session = false;
   var redis_obj;
-
-  var messageListener = function (channel, message) {
-    if(channel === 'users:online') {
-      ioStore.smembers('users_online', function (err, users) {
-        users = users.map(function (u) {
-          console.log(u);
-          return JSON.parse(u);
-        });
-        send({
-          label: 'users:online',
-          data: users
-        });
-      });
-    }
-  };
+  var listening;
 
   var parseSession = function () {
     var deferred = q.defer();
@@ -210,16 +215,14 @@ io.on('connection', function (ws) {
                 err: err,
                 data: data
               });
-
             });
 
             redis_obj = {
-                username: ws.session.user.username || ws.session.user.name
-              , _id: ws.session.user._id
+                username: ws.session.user['username'] || ws.session.user['name']
+              , _id: ws.session.user['_id']
               , status: true
             };
             ioStore.sadd('users_online', JSON.stringify(redis_obj));
-            sub.on('message', messageListener);
             pub.publish('users:connect', JSON.stringify(redis_obj));
             deferred.resolve()
           } else {
@@ -231,12 +234,14 @@ io.on('connection', function (ws) {
     return deferred.promise;
   };
 
+  parseSession();
+
   ws.on('message', function (msg) {
     parseSession()
       .then(function () {
         msg = JSON.parse(msg);
         if(msg.label === 'users:online') {
-          pub.publish('users:online', "");
+          pub.publish('users:online', JSON.stringify(ws.session.user));
         }
       }, function () {
         send('Access Denied. Yo dawg ain\'t going nowhere.')
@@ -244,12 +249,8 @@ io.on('connection', function (ws) {
   })
 
   ws.on('close', function() {
-    parseSession()
-      .then(function () {
-        ioStore.srem('users_online', JSON.stringify(redis_obj));
-        pub.publish('users:disconnect', JSON.stringify(redis_obj));
-        sub.removeListener(messageListener);
-      }, function () {});
+    ioStore.srem('users_online', JSON.stringify(redis_obj));
+    pub.publish('users:disconnect', JSON.stringify(redis_obj));
   });
 });
 
