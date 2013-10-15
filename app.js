@@ -1,24 +1,38 @@
-
 /**
- * Module dependencies.
+ * node stdlib
  */
 var http = require('http')
   , path = require('path');
 
+/**
+ * external dependencies.
+ */
 var express = require('express')
+  , redisStore = require('connect-redis')
   , mongoose = require('mongoose')
   , passport = require('passport')
   , redis = require('redis')
-  , ws = require('ws');
+  , aws = require('aws-sdk')
+  , ws = require('ws')
+  , q = require('q')
+  , async = require('async')
+  , _ = require('lodash');
+
+redisStore = redisStore(express);
 
 /**
- * App setup
+ * app dependencies
  */
 var config = require('./config')
   , models = require('./models')
   , controllers = require('./controllers')
   , injector = require('./utils/injector')
-  , app = express();
+  , io = require('./ws');
+
+// Express CORS middleware
+express.cors = require('./utils/cors');
+
+var app = express();
 
 mongoose.connect('mongodb://'
   + config.db.user
@@ -28,55 +42,10 @@ mongoose.connect('mongodb://'
   + ":"+config.db.port
   + "/"+config.db.dbname);
 
-var aws = require('aws-sdk');
 aws.config.update(config.aws);
 var SQS = new aws.SQS();
 
-var q = require('q')
-  , async = require('async')
-  , _ = require('lodash');
-
-// WebSockets server
-// we're gonna load it so we can use it elsewhere
-var io;
-
-injector.load([
-      {wrapAs: 'io', obj: io}
-    , {wrapAs: 'async', obj: async}
-    , {wrapAs: '_', obj: _}
-    , {wrapAs: 'SQS', obj: SQS }
-    , {wrapAs: 'SNS', obj: new aws.SNS() }
-    , {wrapAs: 'mongoose', obj: mongoose}
-    , models
-    , controllers
-    , {wrapAs: "Config", obj: config}
-  ]);
-
-// all environments
-app.set('injector', injector);
-app.set('port', config.server.port);
-
-/**
- * App Config
- */
-app.use(function (req, res, next) {
-  // Enable CORS
-  res.header("Access-Control-Allow-Origin", req.headers.origin);
-  res.header("Access-Control-Allow-Headers", "x-requested-with, content-type");
-  res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Max-Age", "1000000000");
-  // intercept OPTIONS method
-  if ('OPTIONS' == req.method) {
-    res.send(200);
-  }
-  else {
-    next();
-  }
-});
-
-var RedisStore = require('connect-redis')(express);
-var store = new RedisStore({
+var store = new redisStore({
     host: config.session.store.host
   , port: config.session.store.port
   , prefix: config.session.store.prefix.text
@@ -86,6 +55,30 @@ var store = new RedisStore({
   , password: config.session.store.key
 });
 
+injector.load([
+    {wrapAs: 'cookieParser', obj: express.cookieParser(config.session.secret)}
+  , {wrapAs: 'sessionStore', obj: store}
+  , {wrapAs: 'redis', obj: redis}
+  , {wrapAs: 'io', obj: io}
+  , {wrapAs: 'async', obj: async}
+  , {wrapAs: '_', obj: _}
+  , {wrapAs: 'aws', obj: aws }
+  , {wrapAs: 'SQS', obj: SQS }
+  , {wrapAs: 'mongoose', obj: mongoose}
+  , models
+  , controllers
+  , {wrapAs: "Config", obj: config}
+]);
+
+/**
+ * express vars
+ */
+app.set('port', config.server.port);
+
+/**
+ * express middleware
+ */
+app.use(express.cors());
 app.use(express.logger('dev'));
 app.use(express.cookieParser());
 app.use(express.session({
@@ -109,108 +102,154 @@ if ('dev' == app.get('env')) {
   app.use(express.errorHandler());
 }
 
+/**
+ * express routing
+ */
 var routes = require('./routes');
 routes.register(app);
 
+/**
+ * webserver
+ */
 var server = http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
 });
 
+var createRedisIOClient = function () {
+  return redis.createClient({
+      host: config.io.store.host
+    , port: config.io.store.port
+    , prefix: config.io.store.prefix.text
+        +(  config.io.store.prefix.useEnv
+          ? "_"+process.env.NODE_ENV
+          : '')
+    , password: config.io.store.key
+  });
+}
+
 io = new ws.Server({server: server});
+
+io.broadcast = function(data) {
+  async.each(this.clients, function (client) {
+    client.readyState === 1 && client.send(JSON.stringify(data));
+  }, function () {});
+};
+
+ioStore = createRedisIOClient();
+pub = createRedisIOClient();
+sub = createRedisIOClient();
+
+// Subscribe Redis to some channels
+sub.subscribe('users:connect');
+sub.subscribe('users:disconnect');
+sub.subscribe('users:online');
+
+sub.on('message', function (channel, message) {
+  if(channel === 'users:connect') {
+    io.broadcast({
+      label: 'users:connect',
+      data: message
+    });
+  } else if (channel === 'users:disconnect') {
+    io.broadcast({
+      label: 'users:disconnect',
+      data: message
+    })
+  }
+});
+
 app.set('io', io);
 io.on('connection', function (ws) {
+
+  var send = function (data) {
+    return ws.readyState === 1 && ws.send(JSON.stringify(data));
+  }
+
   ws.session = false;
+  var redis_obj;
 
-  express.cookieParser(config.session.secret)(ws.upgradeReq, null, function(err) {
-    var sessionID = ws.upgradeReq.signedCookies['connect.sid'];
-    store.get(sessionID, function (err, session) {
-      ws.session = session || false;
-      if(ws.session && ws.session.user) {
-        var cw = new aws.CloudWatch();
-
-        cw.putMetricAlarm({
-          AlarmName: config.aws.alarmPrefix+ws.session.user._id,
-          MetricName: "ApproximateNumberOfMessagesVisible",
-          Namespace: config.aws.queuePrefix+ws.session.user._id,
-          Statistic: "Count",
-          Period: 1,
-          EvaluationPeriods: 2,
-          Threshold: 1,
-          ComparisonOperator: "GreaterThanOrEqualToThreshold"
-        }, function (err, data) {
-          ws.send(JSON.stringify({
-            label: 'message:new',
-            err: err,
-            data: data
-          }));
+  var messageListener = function (channel, message) {
+    if(channel === 'users:online') {
+      ioStore.smembers('users_online', function (err, users) {
+        users = users.map(function (u) {
+          console.log(u);
+          return JSON.parse(u);
         });
-
-        var obj = {
-            username: ws.session.user.username || ws.session.user.name
-          , status: true
-        };
-        io.clients.forEach(function (client) {
-          console.log("Number");
-          if(client === ws) {
-            return;
-          }
-          client.send(JSON.stringify({
-            label: 'user:connect',
-            data: JSON.stringify(obj)
-          }));
+        send({
+          label: 'users:online',
+          data: users
         });
-      }
-    });
-  });
-
-  ws.on('message', function (msg) {
-    msg = JSON.parse(msg);
-    if(msg.label === 'user:online') {
-      io.clients.forEach(function (client) {
-        if(client === ws) {
-          return;
-        }
-        if(client.session && client.session.user
-          && client.session.user.username) {
-            var obj = {
-              username: client.session.user.username,
-              status: true
-            };
-            ws.send(JSON.stringify({
-              label: 'user:connect',
-              data: JSON.stringify(obj)
-            }));
-        }
       });
     }
+  };
+
+  var parseSession = function () {
+    var deferred = q.defer();
+    if(ws.session && ws.session._id) {
+      deferred.resolve();
+    } else {
+      express.cookieParser(config.session.secret)(ws.upgradeReq, null, function(err) {
+        var sessionID = ws.upgradeReq.signedCookies['connect.sid'];
+        store.get(sessionID, function (err, session) {
+          ws.session = session || false;
+          if(ws.session && ws.session.user) {
+            var cw = new aws.CloudWatch();
+
+            cw.putMetricAlarm({
+              AlarmName: config.aws.alarmPrefix+ws.session.user._id,
+              MetricName: "ApproximateNumberOfMessagesVisible",
+              Namespace: config.aws.queuePrefix+ws.session.user._id,
+              Statistic: "SampleCount",
+              Period: 60,
+              EvaluationPeriods: 2,
+              Threshold: 1,
+              ComparisonOperator: "GreaterThanOrEqualToThreshold"
+            }, function (err, data) {
+              send({
+                label: 'message:new',
+                err: err,
+                data: data
+              });
+
+            });
+
+            redis_obj = {
+                username: ws.session.user.username || ws.session.user.name
+              , _id: ws.session.user._id
+              , status: true
+            };
+            ioStore.sadd('users_online', JSON.stringify(redis_obj));
+            sub.on('message', messageListener);
+            pub.publish('users:connect', JSON.stringify(redis_obj));
+            deferred.resolve()
+          } else {
+            deferred.reject();
+          }
+        });
+      });
+    }
+    return deferred.promise;
+  };
+
+  ws.on('message', function (msg) {
+    parseSession()
+      .then(function () {
+        msg = JSON.parse(msg);
+        if(msg.label === 'users:online') {
+          pub.publish('users:online', "");
+        }
+      }, function () {
+        send('Access Denied. Yo dawg ain\'t going nowhere.')
+      });
   })
 
   ws.on('close', function() {
-    if(ws.session && ws.session.user) {
-      var username
-        , obj;
-
-      if(ws.session.user) {
-        username = ws.session.user.username || ws.session.user.name;
-        obj = {
-          username: username,
-          status: false
-        };
-      }
-
-      if(!obj) return;
-      console.log("Broadcasting disconnect...");
-      io.clients.forEach(function (client) {
-        console.log("Number");
-        if(client === ws) {
-            return;
-          }
-        client.send(JSON.stringify({
-          label: 'user:disconnect',
-          data: JSON.stringify(obj)
-        }));
-      });
-    }
+    parseSession()
+      .then(function () {
+        ioStore.srem('users_online', JSON.stringify(redis_obj));
+        pub.publish('users:disconnect', JSON.stringify(redis_obj));
+        sub.removeListener(messageListener);
+      }, function () {});
   });
 });
 

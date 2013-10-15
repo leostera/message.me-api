@@ -37,6 +37,18 @@
     "dbname": ""
   },
 
+  "io": {
+    "store": {
+      "host": "",
+      "port": "6379",
+      "prefix": {
+        "text": "gh_",
+        "useEnv": true
+      },
+      "key": ""
+    }
+  },
+
   "session": {
     "secret": "",
     "store": {
