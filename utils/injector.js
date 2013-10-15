@@ -71,3 +71,9 @@ exports.load = function (deps) {
     });
   });
 }
+
+/**
+ * global exports
+ */
+global.__injector = this;
+global.__inject = inject;
