@@ -1,4 +1,4 @@
-grabhalo-challenge
-==================
+# message.me
+> the backend powering the app built with ng2
 
-This is the repo where I have to do the messaging app for the grabHalo team to see I don't suck.
+:)
