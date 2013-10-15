@@ -14,18 +14,18 @@
   },
 
   "aws": {
-    "accessKeyId": "AKIAJ2PSLM6XN7Y4NYEQ",
-    "secretAccessKey": "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",
-    "region": "us-east-1",
+    "accessKeyId": "",
+    "secretAccessKey": "",
+    "region": "",
     "awsAccountId": "",
-    "queuePrefix": "gh_inbox__",
-    "alarmPrefix": "gh_incoming__"
+    "queuePrefix": "",
+    "alarmPrefix": ""
   },
 
   "auth": {
     "facebook": {
-      "id": "435065866602908",
-      "secret": "5e3fe5d7c283343a97dca4b9598d661f"
+      "id": "",
+      "secret": ""
     }
   },
 
