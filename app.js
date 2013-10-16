@@ -188,42 +188,40 @@ io.on('connection', function (ws) {
   var redis_obj;
   var listening;
 
+  var setAlarm = function () {
+    var cw = new aws.CloudWatch();
+    cw.putMetricAlarm({
+      AlarmName: config.aws.alarmPrefix+ws.session.user._id,
+      MetricName: "ApproximateNumberOfMessagesVisible",
+      Namespace: config.aws.queuePrefix+ws.session.user._id,
+      Statistic: "SampleCount",
+      Period: 60,
+      EvaluationPeriods: 2,
+      Threshold: 1,
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+    }, function (err, data) {
+      send({
+        label: 'message:new',
+        err: err,
+        data: data
+      });
+    });
+  };
+
+  var i = 0, j=0;
+
   var parseSession = function () {
     var deferred = q.defer();
-    if(ws.session && ws.session._id) {
-      deferred.resolve();
+    var counter = i+1;
+    i+=1;
+    if(ws.session && ws.session.user && ws.session.user._id) {
+      deferred.resolve(true);
     } else {
       express.cookieParser(config.session.secret)(ws.upgradeReq, null, function(err) {
         var sessionID = ws.upgradeReq.signedCookies['connect.sid'];
         store.get(sessionID, function (err, session) {
           ws.session = session || false;
           if(ws.session && ws.session.user) {
-            var cw = new aws.CloudWatch();
-
-            cw.putMetricAlarm({
-              AlarmName: config.aws.alarmPrefix+ws.session.user._id,
-              MetricName: "ApproximateNumberOfMessagesVisible",
-              Namespace: config.aws.queuePrefix+ws.session.user._id,
-              Statistic: "SampleCount",
-              Period: 60,
-              EvaluationPeriods: 2,
-              Threshold: 1,
-              ComparisonOperator: "GreaterThanOrEqualToThreshold"
-            }, function (err, data) {
-              send({
-                label: 'message:new',
-                err: err,
-                data: data
-              });
-            });
-
-            redis_obj = {
-                username: ws.session.user['username'] || ws.session.user['name']
-              , _id: ws.session.user['_id']
-              , status: true
-            };
-            ioStore.sadd('users_online', JSON.stringify(redis_obj));
-            pub.publish('users:connect', JSON.stringify(redis_obj));
             deferred.resolve()
           } else {
             deferred.reject();
@@ -234,9 +232,22 @@ io.on('connection', function (ws) {
     return deferred.promise;
   };
 
-  parseSession();
+  parseSession()
+    .then(function () {
+      setAlarm();
+      // add to connected list
+      redis_obj = {
+          username: ws.session.user['username'] || ws.session.user['name']
+        , _id: ws.session.user['_id']
+        , status: true
+      };
+      ioStore.sadd('users_online', JSON.stringify(redis_obj));
+      // publish the new user
+      pub.publish('users:connect', JSON.stringify(redis_obj));
+    });
 
   ws.on('message', function (msg) {
+    j+=1;
     parseSession()
       .then(function () {
         msg = JSON.parse(msg);
@@ -245,12 +256,17 @@ io.on('connection', function (ws) {
         }
       }, function () {
         send('Access Denied. Yo dawg ain\'t going nowhere.')
+        ws.close();
       });
   })
 
   ws.on('close', function() {
-    ioStore.srem('users_online', JSON.stringify(redis_obj));
-    pub.publish('users:disconnect', JSON.stringify(redis_obj));
+    console.log("Closed socket.");
+    if(redis_obj) {
+      ioStore.srem('users_online', JSON.stringify(redis_obj));
+      pub.publish('users:disconnect', JSON.stringify(redis_obj));
+      redis_obj = null;
+    }
   });
 });
 
