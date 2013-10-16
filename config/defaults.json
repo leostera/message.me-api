@@ -38,6 +38,13 @@
   },
 
   "io": {
+    "labels": [
+      "users:online",
+      "users:connect",
+      "users:disconnect",
+      "messages:new",
+      "messages:get"
+    ],
     "store": {
       "host": "",
       "port": "6379",

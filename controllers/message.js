@@ -3,38 +3,47 @@ var q = require('q');
  * User Routes
  * @type {Object}
  */
-module.exports = function (_, async, SQS, ConversationModel, UserModel, MessageModel, Config) {
+module.exports = function (Publisher, _, async, SQS, ConversationModel, UserModel, MessageModel, Config) {
 
-  var saveMessage = function (message, user, conversation) {
-    return function (meta, done) {
-      var msg = new MessageModel.model();
-      msg.text = message;
-      msg.meta = meta;
-      conversation.messages.push(msg);
-      conversation.save(function (err) {
-        if(err) {
-          done(err)
-        } else {
-          done(null, conversation);
-        }
-      });
+  var saveConversation = function (message, conversation, cb) {
+    var msg = new MessageModel.model();
+    msg.text = message.text;
+    conversation.messages.push(msg);
+    conversation.save(function (err) {
+      if(err) {
+        done(err)
+      } else {
+        done(null, conversation);
+      }
+    });
+  }
+
+  var saveMessage = function (from, message, user, done) {
+    if(!message.belongsTo) {
+      var conversation = new ConversationModel();
+      conversation.from = from;
+      conversation.to = user._id;
+      saveConversation(message, conversation, done);
+    } else {
+      ConversationModel.find({_id: belongsTo, from: from, to: user._id},
+        function (err, conversation) {
+          if(err) {
+            cb(err);
+          } else {
+            saveConversation(message, conversation, done);
+          }
+        });
     }
   }
 
   var queueMessage = function (message, user) {
-    return function (done) {
-      SQS.getQueueUrl({
-        QueueName: Config.aws.queuePrefix+user._id
-      }, function (err, data) {
-        SQS.sendMessage({
-          QueueUrl: data.QueueUrl,
-          MessageBody: message,
-          DelaySeconds: 5
-        }, function (err, data) {
-          done(err, data);
-        })
-      });
-    }
+    SQS.sendMessage({
+      QueueUrl: "https://sqs.us-east-1.amazonaws.com/"+Config.aws.awsAccountId+"/"+Config.aws.queuePrefix+user._id,
+      MessageBody: message,
+      DelaySeconds: 5
+    }, function (err, data) {
+      Publisher.publish('messages:new', JSON.stringify(user));
+    });
   }
 
   return {
@@ -59,24 +68,17 @@ module.exports = function (_, async, SQS, ConversationModel, UserModel, MessageM
             if(err || !user) {
               cb(err);
             }
-            var conversation = new ConversationModel();
-            conversation.from = req.session.user._id;
-            conversation.to = user._id;
-            async.waterfall([
-                queueMessage(req.body.text, user)
-              , saveMessage(req.body.text, user, conversation)
-              ], function (err, result) {
-                cb(err, result);
-              });
+            queueMessage(req.body.text, user);
+            saveMessage(req.session.user._id, req.body, user, cb);
           });
         });
       });
 
-      async.parallel(tasks, function (err, messages) {
+      async.parallel(tasks, function (err) {
         if(err) {
           res.json(500, err);
         } else {
-          res.json(200, messages)
+          res.json(200)
         }
       });
     }

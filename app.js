@@ -55,8 +55,25 @@ var store = new redisStore({
   , password: config.session.store.key
 });
 
+var createRedisIOClient = function () {
+  return redis.createClient({
+      host: config.io.store.host
+    , port: config.io.store.port
+    , prefix: config.io.store.prefix.text
+        +(  config.io.store.prefix.useEnv
+          ? "_"+process.env.NODE_ENV
+          : '')
+    , password: config.io.store.key
+  });
+}
+
+var ioStore = createRedisIOClient();
+var pub = createRedisIOClient();
+var sub = createRedisIOClient();
+
 injector.load([
-    {wrapAs: 'cookieParser', obj: express.cookieParser(config.session.secret)}
+  , {wrapAs: 'Publisher', obj: pub}
+  , {wrapAs: 'cookieParser', obj: express.cookieParser(config.session.secret)}
   , {wrapAs: 'sessionStore', obj: store}
   , {wrapAs: 'redis', obj: redis}
   , {wrapAs: 'io', obj: io}
@@ -115,22 +132,15 @@ var server = http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
 });
 
-var createRedisIOClient = function () {
-  return redis.createClient({
-      host: config.io.store.host
-    , port: config.io.store.port
-    , prefix: config.io.store.prefix.text
-        +(  config.io.store.prefix.useEnv
-          ? "_"+process.env.NODE_ENV
-          : '')
-    , password: config.io.store.key
-  });
-}
+/**
+ * ws server
+ */
 
 io = new ws.Server({server: server});
 
-io.broadcast = function(data) {
+io.broadcast = function (data) {
   async.each(this.clients, function (client) {
+    console.log("broadcasting to",client.session.user.username,data);
     client.readyState === 1 && client.send(JSON.stringify(data));
   }, function () {});
 };
@@ -143,14 +153,29 @@ io.sendTo = function (data, user) {
   }, function () {});
 }
 
-ioStore = createRedisIOClient();
-pub = createRedisIOClient();
-sub = createRedisIOClient();
+io.pick = function (user) {
+  var deferred = q.defer();
+  async.each(this.clients, function (client, cb) {
+    if(!client.session) cb(null);
+    if(user._id === client.session.user._id) {
+      cb(this.clients.indexOf(client));
+    }
+  }.bind(this), function (id) {
+    if(id) {
+      deferred.resolve(id);
+    } else {
+      deferred.reject();
+    }
+  });
+  return deferred.promise;
+}
 
 // Subscribe Redis to some channels
-sub.subscribe('users:connect');
-sub.subscribe('users:disconnect');
-sub.subscribe('users:online');
+var allowedLabels = config.io.labels;
+
+allowedLabels.forEach(function (label) {
+  sub.subscribe(label);
+});
 
 sub.on('message', function (channel, message) {
   if(channel === 'users:connect') {
@@ -158,7 +183,7 @@ sub.on('message', function (channel, message) {
       label: 'users:connect',
       data: message
     });
-  } else if (channel === 'users:disconnect') {
+  } else if(channel === 'users:disconnect') {
     console.log(channel, message);
     io.broadcast({
       label: 'users:disconnect',
@@ -174,8 +199,55 @@ sub.on('message', function (channel, message) {
         data: users
       }, JSON.parse(message));
     });
+  } else if(channel === 'messages:new') {
+    var user = JSON.parse(message);
+    console.log(channel, user);
+    io.pick(user)
+      .then(function (id) {
+        getMessages(io.clients[id]);
+      });
   }
 });
+
+var getMessages = function (ws) {
+  var queueUrl = "https://sqs.us-east-1.amazonaws.com/"+
+    +config.aws.awsAccountId+"/"
+    +config.aws.queuePrefix+ws.session.user._id;
+  console.log("waiting from",queueUrl);
+  SQS.receiveMessage({
+      QueueUrl: queueUrl
+    , MaxNumberOfMessages: 10
+    , VisibilityTimeout: 1
+    , WaitTimeSeconds: 1
+  }, function (err, data) {
+    console.log(err,data);
+    if(ws && data && (data.Messages || data.Message)) {
+      ws.send(JSON.stringify({
+        label: 'message:new',
+        err: err,
+        data: data
+      }));
+
+      if(Array.isArray(data.Messages)) {
+        SQS.deleteMessageBatch({
+          QueueUrl: queueUrl,
+          Entries: data.Messages.map(function (m) {
+            return {ReceiptHandle: m.ReceiptHandle, Id: m.MessageId};
+          })
+        }, function (err, data) {
+          console.log(ws.session.user.username, err, data);
+        })
+      } else {
+        SQS.deleteMessage({
+          QueueUrl: queueUrl,
+          ReceiptHandle: data.Message.MessageId
+        }, function (err, data) {
+          console.log(ws.session.user.username, err, data);
+        });
+      }
+    }
+  });
+};
 
 app.set('io', io);
 io.on('connection', function (ws) {
@@ -188,62 +260,17 @@ io.on('connection', function (ws) {
   var redis_obj;
   var listening;
 
-  var sqs = new aws.SQS();
-  var getMessages = function () {
-    var queueUrl = "https://sqs.us-east-1.amazonaws.com/"+
-      +config.aws.awsAccountId+"/"
-      +config.aws.queuePrefix+ws.session.user._id;
-
-    sqs.receiveMessage({
-      QueueUrl: queueUrl
-    , MaxNumberOfMessages: 10
-    , VisibilityTimeout: 1
-    , WaitTimeSeconds: 0
-    }, function (err, data) {
-      if(ws && data && (data.Messages || data.Message)) {
-        send({
-          label: 'message:new',
-          err: err,
-          data: data
-        });
-
-        if(Array.isArray(data.Messages)) {
-          sqs.deleteMessageBatch({
-            QueueUrl: queueUrl,
-            Entries: data.Messages.map(function (m) {
-              return {ReceiptHandle: m.ReceiptHandle, Id: m.MessageId};
-            })
-          }, function (err, data) {
-            console.log(ws.session.user.username, err, data);
-          })
-        } else {
-          sqs.deleteMessage({
-            QueueUrl: queueUrl,
-            ReceiptHandle: data.Message.MessageId
-          }, function (err, data) {
-            console.log(ws.session.user.username, err, data);
-          });
-        }
-      }
-
-      if(ws) {
-        getMessages();
-      }
-    });
-  };
-
-  var i = 0, j=0;
-
   var parseSession = function () {
     var deferred = q.defer();
-    var counter = i+1;
-    i+=1;
     if(ws.session && ws.session.user && ws.session.user._id) {
       deferred.resolve(true);
     } else {
       express.cookieParser(config.session.secret)(ws.upgradeReq, null, function(err) {
         var sessionID = ws.upgradeReq.signedCookies['connect.sid'];
         store.get(sessionID, function (err, session) {
+          if(err) {
+            deferred.reject();
+          }
           ws.session = session || false;
           if(ws.session && ws.session.user) {
             deferred.resolve()
@@ -258,7 +285,6 @@ io.on('connection', function (ws) {
 
   parseSession()
     .then(function () {
-      getMessages();
       // add to connected list
       redis_obj = {
           username: ws.session.user['username'] || ws.session.user['name']
@@ -268,16 +294,20 @@ io.on('connection', function (ws) {
       ioStore.sadd('users_online', JSON.stringify(redis_obj));
       // publish the new user
       pub.publish('users:connect', JSON.stringify(redis_obj));
+      // and get messages
+      getMessages();
     });
 
   ws.on('message', function (msg) {
-    j+=1;
     parseSession()
       .then(function () {
         msg = JSON.parse(msg);
-        if(msg.label === 'users:online') {
-          pub.publish('users:online', JSON.stringify(ws.session.user));
+        if(allowedLabels.indexOf(msg.label) !== -1) {
+          pub.publish(msg.label, JSON.stringify(ws.session.user));
+        } else {
+          send('Access Denied. '+msg.label+'? Ain\'t nobody got time fo dat');
         }
+
       }, function () {
         send('Access Denied. Yo dawg ain\'t going nowhere.')
         ws.close();

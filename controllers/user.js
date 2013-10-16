@@ -109,9 +109,6 @@ module.exports = function (SQS, UserModel, Config) {
       res.json(403, {error: "Uhm, you're not logged in."});
     },
 
-    login: function (req, res) {
-    },
-
     logout: function (req, res) {
       req.session.user = undefined;
       req.session.save();
@@ -124,6 +121,12 @@ module.exports = function (SQS, UserModel, Config) {
       } else {
         res.send(403, {error: 'No user logged in'});
       }
+    },
+
+    list: function (req, res) {
+      UserModel.find({},'username _id',function (err, users) {
+        res.json(200, users);
+      });
     }
 
   }
