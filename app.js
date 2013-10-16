@@ -188,23 +188,47 @@ io.on('connection', function (ws) {
   var redis_obj;
   var listening;
 
-  var setAlarm = function () {
-    var cw = new aws.CloudWatch();
-    cw.putMetricAlarm({
-      AlarmName: config.aws.alarmPrefix+ws.session.user._id,
-      MetricName: "ApproximateNumberOfMessagesVisible",
-      Namespace: config.aws.queuePrefix+ws.session.user._id,
-      Statistic: "SampleCount",
-      Period: 60,
-      EvaluationPeriods: 2,
-      Threshold: 1,
-      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+  var sqs = new aws.SQS();
+  var getMessages = function () {
+    var queueUrl = "https://sqs.us-east-1.amazonaws.com/"+
+      +config.aws.awsAccountId+"/"
+      +config.aws.queuePrefix+ws.session.user._id;
+
+    sqs.receiveMessage({
+      QueueUrl: queueUrl
+    , MaxNumberOfMessages: 10
+    , VisibilityTimeout: 1
+    , WaitTimeSeconds: 0
     }, function (err, data) {
-      send({
-        label: 'message:new',
-        err: err,
-        data: data
-      });
+      if(ws && data && (data.Messages || data.Message)) {
+        send({
+          label: 'message:new',
+          err: err,
+          data: data
+        });
+
+        if(Array.isArray(data.Messages)) {
+          sqs.deleteMessageBatch({
+            QueueUrl: queueUrl,
+            Entries: data.Messages.map(function (m) {
+              return {ReceiptHandle: m.ReceiptHandle, Id: m.MessageId};
+            })
+          }, function (err, data) {
+            console.log(ws.session.user.username, err, data);
+          })
+        } else {
+          sqs.deleteMessage({
+            QueueUrl: queueUrl,
+            ReceiptHandle: data.Message.MessageId
+          }, function (err, data) {
+            console.log(ws.session.user.username, err, data);
+          });
+        }
+      }
+
+      if(ws) {
+        getMessages();
+      }
     });
   };
 
@@ -234,7 +258,7 @@ io.on('connection', function (ws) {
 
   parseSession()
     .then(function () {
-      setAlarm();
+      getMessages();
       // add to connected list
       redis_obj = {
           username: ws.session.user['username'] || ws.session.user['name']
@@ -261,7 +285,6 @@ io.on('connection', function (ws) {
   })
 
   ws.on('close', function() {
-    console.log("Closed socket.");
     if(redis_obj) {
       ioStore.srem('users_online', JSON.stringify(redis_obj));
       pub.publish('users:disconnect', JSON.stringify(redis_obj));
