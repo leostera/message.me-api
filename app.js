@@ -26,8 +26,9 @@ redisStore = redisStore(express);
 var config = require('./config')
   , models = require('./models')
   , controllers = require('./controllers')
-  , injector = require('./utils/injector')
-  , io = require('./ws');
+  , injector = require('./utils/injector');
+
+var io;
 
 // Express CORS middleware
 express.cors = require('./utils/cors');
@@ -135,7 +136,6 @@ var server = http.createServer(app).listen(app.get('port'), function(){
 /**
  * ws server
  */
-
 io = new ws.Server({server: server});
 
 io.broadcast = function (data) {

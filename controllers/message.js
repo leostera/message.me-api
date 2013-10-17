@@ -5,7 +5,7 @@ var q = require('q');
  */
 module.exports = function (Publisher, _, async, SQS, ConversationModel, UserModel, MessageModel, Config) {
 
-  var saveConversation = function (message, conversation, cb) {
+  var saveConversation = function (message, conversation, done) {
     var msg = new MessageModel.model();
     msg.text = message.text;
     conversation.messages.push(msg);
@@ -18,27 +18,21 @@ module.exports = function (Publisher, _, async, SQS, ConversationModel, UserMode
     });
   }
 
-  var saveMessage = function (from, message, user, done) {
-    if(!message.belongsTo) {
-      var conversation = new ConversationModel();
-      conversation.from = from;
-      conversation.to = user._id;
-      saveConversation(message, conversation, done);
-    } else {
-      ConversationModel.find({_id: belongsTo, from: from, to: user._id},
-        function (err, conversation) {
-          if(err) {
-            cb(err);
-          } else {
-            saveConversation(message, conversation, done);
-          }
-        });
-    }
+  var saveMessage = function (opts, done) {
+    ConversationModel.findOne({_id: opts.conversationId, from: opts.from, to: opts.to},
+      function (err, conversation) {
+        if(err) {
+          done(err);
+        } else {
+          saveConversation(opts.message, conversation, done);
+        }
+      });
   }
 
   var queueMessage = function (message, user) {
     SQS.sendMessage({
-      QueueUrl: "https://sqs.us-east-1.amazonaws.com/"+Config.aws.awsAccountId+"/"+Config.aws.queuePrefix+user._id,
+      QueueUrl: "https://sqs.us-east-1.amazonaws.com/"+
+        Config.aws.awsAccountId+"/"+Config.aws.queuePrefix+user._id,
       MessageBody: message,
       DelaySeconds: 5
     }, function (err, data) {
@@ -48,6 +42,10 @@ module.exports = function (Publisher, _, async, SQS, ConversationModel, UserMode
 
   return {
     send: function (req, res) {
+      if(!req.params.cid) {
+        res.json(500, {error: "No conversation id!"});
+      }
+
       if(!req.body) {
         res.json(500, {error: "req.body is empty!"});
       }
@@ -56,31 +54,29 @@ module.exports = function (Publisher, _, async, SQS, ConversationModel, UserMode
         res.json(500, {error: "Message was empty!"});
       }
 
-      if(!req.body.to) {
-        res.json(500, {error: "No recipients!"});
-      }
-
       var tasks = [];
 
-      req.body.to.forEach(function (user) {
-        tasks.push(function (cb) {
-          UserModel.findOne({username: user}, function (err, user) {
+      ConversationModel.findOne({_id: req.params.cid, from: req.session.user._id},
+        function (err, conversation) {
+          UserModel.findOne({_id: conversation.to}
+          , function (err, user) {
             if(err || !user) {
-              cb(err);
+              res.json(500,err, user);
+            } else if (user) {
+              queueMessage(req.body.text, user);
+              saveMessage({
+                from: req.session.user._id,
+                message: req.body,
+                to: user._id,
+                conversationId: req.params.cid
+              }, function (conversation) {
+                res.json(200,conversation);
+              });
+            } else {
+              res.json(500, {error: "Crap! No user!"});
             }
-            queueMessage(req.body.text, user);
-            saveMessage(req.session.user._id, req.body, user, cb);
           });
         });
-      });
-
-      async.parallel(tasks, function (err) {
-        if(err) {
-          res.json(500, err);
-        } else {
-          res.json(200)
-        }
-      });
     }
   }
 }

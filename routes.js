@@ -13,9 +13,10 @@ exports.register = function(app){
     app.get('/users', UserController.isLoggedIn, UserController.list);
 
     // Conversation
-    app.get('/conversations', UserController.isLoggedIn, UserController.isLoggedIn,ConversationController.list);
+    app.get('/conversations', UserController.isLoggedIn, ConversationController.list);
+    app.post('/conversations', UserController.isLoggedIn, ConversationController.start);
 
     // Message endpoints
-    app.post('/messages', UserController.isLoggedIn, MessageController.send);
+    app.post('/conversations/:cid/messages', UserController.isLoggedIn, MessageController.send);
   });
 };
