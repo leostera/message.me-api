@@ -161,6 +161,7 @@ io.pick = function (user) {
     if(user._id.toString() === client.session.user._id.toString()) {
       cb(this.clients.indexOf(client));
     }
+    cb(null);
   }.bind(this), function (id) {
     if(id) {
       deferred.resolve(id);
