@@ -4,6 +4,10 @@ var passport = require('passport');
  */
 exports.register = function(app){
   __inject(function (Config, UserController, MessageController, ConversationController) {
+    app.get('/ping', function (req, res) {
+      res.json(200);
+    });
+
     // OAuth2 Strategies
     app.post('/auth/facebook', UserController.authenticate);
 
