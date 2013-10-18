@@ -8,6 +8,8 @@ module.exports = function (Publisher, _, async, SQS, ConversationModel, UserMode
   var saveConversation = function (message, conversation, done) {
     var msg = new MessageModel.model();
     msg.text = message.text;
+    msg.from = message.from;
+    msg.to = message.to;
     conversation.messages.push(msg);
     conversation.save(function (err) {
       if(err) {
@@ -24,7 +26,7 @@ module.exports = function (Publisher, _, async, SQS, ConversationModel, UserMode
         if(err) {
           done(err);
         } else {
-          saveConversation(opts.message, conversation, done);
+          saveConversation(opts, conversation, done);
         }
       });
   }
