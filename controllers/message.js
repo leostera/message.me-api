@@ -5,32 +5,6 @@ var q = require('q');
  */
 module.exports = function (Publisher, _, async, SQS, ConversationModel, UserModel, MessageModel, Config) {
 
-  var saveConversation = function (message, conversation, done) {
-    var msg = new MessageModel.model();
-    msg.text = message.text;
-    msg.from = message.from;
-    msg.to = message.to;
-    conversation.messages.push(msg);
-    conversation.save(function (err) {
-      if(err) {
-        done(err)
-      } else {
-        done(null, conversation);
-      }
-    });
-  }
-
-  var saveMessage = function (opts, done) {
-    ConversationModel.findOne({_id: opts.conversationId, from: opts.from, to: opts.to},
-      function (err, conversation) {
-        if(err) {
-          done(err);
-        } else {
-          saveConversation(opts, conversation, done);
-        }
-      });
-  }
-
   var queueMessage = function (message, user) {
     SQS.sendMessage({
       QueueUrl: "https://sqs.us-east-1.amazonaws.com/"+
@@ -66,13 +40,17 @@ module.exports = function (Publisher, _, async, SQS, ConversationModel, UserMode
               res.json(500,err, user);
             } else if (user) {
               queueMessage(req.body.text, user);
-              saveMessage({
-                from: req.session.user._id,
-                message: req.body,
-                to: user._id,
-                conversationId: req.params.cid
-              }, function (conversation) {
-                res.json(200,conversation);
+              var msg = new MessageModel.model();
+              msg.text = req.body.text;
+              msg.from = req.session.user._id;
+              msg.to = user._id;
+              conversation.messages.push(msg);
+              conversation.save(function (err) {
+                if(err) {
+                  res.json(500, err);
+                } else {
+                  res.json(200,conversation);
+                }
               });
             } else {
               res.json(500, {error: "Crap! No user!"});
