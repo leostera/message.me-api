@@ -157,7 +157,8 @@ io.pick = function (user) {
   var deferred = q.defer();
   async.each(this.clients, function (client, cb) {
     if(!client.session || !client.session.user) cb(null);
-    if(user._id === client.session.user._id) {
+    console.log(client.session.user._id, user._id);
+    if(user._id.toString() === client.session.user._id.toString()) {
       cb(this.clients.indexOf(client));
     }
   }.bind(this), function (id) {
@@ -213,19 +214,17 @@ var getMessages = function (ws) {
   var queueUrl = "https://sqs.us-east-1.amazonaws.com/"+
     +config.aws.awsAccountId+"/"
     +config.aws.queuePrefix+ws.session.user._id;
-  console.log("waiting from",queueUrl);
   SQS.receiveMessage({
       QueueUrl: queueUrl
     , MaxNumberOfMessages: 10
     , VisibilityTimeout: 1
-    , WaitTimeSeconds: 1
+    , WaitTimeSeconds: 5
   }, function (err, data) {
-    console.log(err,data);
     if(ws && data && (data.Messages || data.Message)) {
       ws.send(JSON.stringify({
         label: 'message:new',
         err: err,
-        data: data
+        data: data.Message || data.Messages
       }));
 
       if(Array.isArray(data.Messages)) {
