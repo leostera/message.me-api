@@ -9,8 +9,8 @@ module.exports = function (Publisher, _, async, SQS, ConversationModel, UserMode
     SQS.sendMessage({
       QueueUrl: "https://sqs.us-east-1.amazonaws.com/"+
         Config.aws.awsAccountId+"/"+Config.aws.queuePrefix+user._id,
-      MessageBody: message,
-      DelaySeconds: 5
+      MessageBody: JSON.stringify(message),
+      DelaySeconds: 0
     }, function (err, data) {
       Publisher.publish('messages:new', JSON.stringify(user));
     });
@@ -45,15 +45,19 @@ module.exports = function (Publisher, _, async, SQS, ConversationModel, UserMode
           }
           UserModel.findOne({_id: id}
           , function (err, user) {
-            console.log("I mean user", user);
             if(err || !user) {
               res.json(500,err, user);
             } else if (user) {
-              queueMessage(req.body.text, user);
               var msg = new MessageModel.model();
               msg.text = req.body.text;
               msg.from = req.session.user._id;
               msg.to = user._id;
+              queueMessage({
+                cid: conversation._id,
+                text: req.body.text,
+                from: msg.from,
+                to: msg.to
+              }, user);
               conversation.messages.push(msg);
               conversation.save(function (err) {
                 if(err) {
