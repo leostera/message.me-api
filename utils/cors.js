@@ -1,6 +1,6 @@
 module.exports = function (opts) {
   opts = opts || {};
-  opts.headers = opts.headers || "*";
+  opts.headers = opts.headers || "x-requested-with, content-type";
   opts.methods = opts.methods || "*";
   opts.credentials = opts.credentials || "true";
   opts.maxAge = opts.maxAge || "1000000000";
