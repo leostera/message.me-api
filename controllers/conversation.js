@@ -2,19 +2,58 @@
  * User Routes
  * @type {Object}
  */
-module.exports = function (async, ConversationModel, MessageController, Config) {
+module.exports = function (async, ConversationModel, UserModel, MessageController, Config) {
 
   return {
     list: function (req, res) {
-      ConversationModel.find({from: req.session.user._id}
-        , function (err, conversations) {
-        if(err) {
-          res.json(500, err)
-        } else if (!conversations) {
-          res.json(404);
-        } else {
-          res.json(200, JSON.parse(JSON.stringify(conversations)));
+      ConversationModel.find({
+          $or: [
+            {
+              from: req.session.user._id
+            },{
+              to: req.session.user._id
+            }
+          ]
         }
+      , function (err, conversations) {
+        conversations = JSON.parse(JSON.stringify(conversations));
+        console.log(conversations)
+        async.each(conversations, function (conversation, doneEach) {
+          async.parallel([
+            // get to
+            function (done) {
+              UserModel.findOne({_id: conversation.to}, function (err, u) {
+                if(err) {
+                 return done(err);
+                } else {
+                  conversation.to = u;
+                  done(null);
+                }
+              });
+            },
+            // get from
+            function (done) {
+              UserModel.findOne({_id: conversation.from}, function (err, u) {
+                if(err) {
+                 return done(err);
+                } else {
+                  conversation.from = u;
+                  done(null);
+                }
+              });
+            },
+          ], function (err) {
+            doneEach(err);
+          })
+        }, function (err) {
+          if(err) {
+            res.json(500, err)
+          } else if (!conversations) {
+            res.json(404);
+          } else {
+            res.json(200, conversations);
+          }
+        });
       });
     },
 
