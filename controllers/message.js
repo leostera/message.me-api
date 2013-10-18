@@ -32,10 +32,20 @@ module.exports = function (Publisher, _, async, SQS, ConversationModel, UserMode
 
       var tasks = [];
 
-      ConversationModel.findOne({_id: req.params.cid, from: req.session.user._id},
-        function (err, conversation) {
-          UserModel.findOne({_id: conversation.to}
+      ConversationModel.findOne({_id: req.params.cid, $or: [
+          {from: req.session.user._id},
+          {to: req.session.user._id},
+        ]}
+        , function (err, conversation) {
+          var id;
+          if(conversation.from.toString() === req.session.user._id) {
+            id = conversation.to.toString();
+          } else {
+            id = conversation.from.toString();
+          }
+          UserModel.findOne({_id: id}
           , function (err, user) {
+            console.log("I mean user", user);
             if(err || !user) {
               res.json(500,err, user);
             } else if (user) {
