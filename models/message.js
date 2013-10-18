@@ -11,6 +11,14 @@ module.exports = function (mongoose) {
         type: Boolean,
         default: false
       },
+      from: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: true
+      },
+      to: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: true
+      },
       meta: {}
   });
 
