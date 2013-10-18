@@ -156,7 +156,7 @@ io.sendTo = function (data, user) {
 io.pick = function (user) {
   var deferred = q.defer();
   async.each(this.clients, function (client, cb) {
-    if(!client.session) cb(null);
+    if(!client.session || !client.session.user) cb(null);
     if(user._id === client.session.user._id) {
       cb(this.clients.indexOf(client));
     }
