@@ -160,8 +160,9 @@ io.pick = function (user) {
     console.log(client.session.user._id, user._id);
     if(user._id.toString() === client.session.user._id.toString()) {
       cb(this.clients.indexOf(client));
+    } else {
+      cb(null);
     }
-    cb(null);
   }.bind(this), function (id) {
     if(id) {
       deferred.resolve(id);
