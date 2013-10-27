@@ -7,5 +7,7 @@ if(cluster.isMaster) {
   }
 } else {
   console.log('Starting worker #', cluster.worker.id,'– pid:', process.pid);
-  require('./worker');
+  var server = require('./worker-http');
+  var io = require('./worker-ws');
+  io.start(server);
 }
