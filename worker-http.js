@@ -19,12 +19,8 @@ express.cors = require('./lib/utils/cors');
 // setup the app, sessionstore and database connection
 
 var app      = express();
-var config   = global.config = require('./config');
+var config   = global.config;
 
-config.session.store.prefix = config.session.store.prefix.text +
-    ( config.session.store.prefix.useEnv
-      ? "_"+process.env.NODE_ENV
-      : '');
 var store = new redisStore(config.session.store);
 
 mongoose.connect('mongodb://'
