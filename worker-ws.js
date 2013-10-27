@@ -151,31 +151,34 @@ var sendTo = function (data, user) {
 
 var pick = function (user) {
   var deferred = q.defer();
-  async.filter(this.clients, function (client, cb) {
-    if(client.session && client.session.user) {
-      console.log(user._id.toString(),client.session.user._id.toString(),user._id.toString()==client.session.user._id.toString(),user._id.toString()===client.session.user._id.toString());
-      if(user._id.toString() === client.session.user._id.toString()) {
-        cb(true);
-      } else {
-        console.log("client has a different user", user, client.session && client.session.user);
-        cb(false);
-      }
+  store.hgetall('user_'+user._id, function (err, obj) {
+    if(!err && obj && obj.pid == process.pid) {
+      console.log(user._id, obj.pid, process.pid);
+      async.filter(this.clients, function (client, cb) {
+        if(client.session && client.session.user) {
+          if(user._id.toString() === client.session.user._id.toString()) {
+            cb(true);
+          } else {
+            cb(false);
+          }
+        } else {
+          cb(false);
+        }
+      }.bind(this), function (client) {
+        if(client.length === 1) {
+          var id = this.clients.indexOf(client[0]);
+          console.log("found user:",user._id.toString(),"– pid:",process.pid,"– socket:",id);
+          deferred.resolve(client[0]);
+        } else if (client.length > 1) {
+          deferred.reject();
+        } else {
+          deferred.reject();
+        }
+      }.bind(this));
     } else {
-      console.log("client doesn't have a session or user", client.session && client.session.user);
-      cb(false);
-    }
-  }.bind(this), function (client) {
-    if(client.length === 1) {
-      var id = this.clients.indexOf(client[0]);
-      console.log("found user:",user._id.toString(),"– pid:",process.pid,"– socket:",id);
-      deferred.resolve(client[0]);
-    } else if (client.length > 1) {
-      console.log("jeez, more than one socket in this pid with that user!", process.pid, user._id);
-      deferred.reject();
-    } else {
-      console.log("not in this pid", process.pid);
-      deferred.reject();
+      deferred.reject(err);
     }
   }.bind(this));
+  
   return deferred.promise;
 }
