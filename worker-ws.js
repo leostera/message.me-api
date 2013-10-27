@@ -52,22 +52,12 @@ io.start = function (server) {
     ws.id = counter;
     counter = counter+1;
 
-    var redis_obj;
+    ws.redis_obj = undefined;
 
     parseSession(ws)
-      .then(function () {
-        redis_obj = {
-            username: ws.session.user['username'] || ws.session.user['name']
-          , _id: ws.session.user._id.toString()
-          , status: true
-          , wsid: ws.id
-          , pid: process.pid
-        }
-        var str = JSON.stringify(redis_obj);
-        store.sadd('users_online', redis_obj._id);
-        store.hmset('user_'+redis_obj._id, redis_obj);
-        pub.publish('users:connect', str);
-      });
+      .then(users.updateOnline(ws, pub, sub, store));
+
+    users.pingAlive(ws, pub, sub, store, config.io.pingAlive);
 
     ws.on('message', function (msg) {
       parseSession(ws)
@@ -86,13 +76,17 @@ io.start = function (server) {
     })
 
     ws.on('close', function() {
-      if(redis_obj) {
-        var str = JSON.stringify(redis_obj);
-        store.srem('users_online', redis_obj._id);
+      if(ws.redis_obj) {
+        var str = JSON.stringify(ws.redis_obj);
+        console.log("Disconnecting user", ws.redis_obj._id);
+        store.srem('users_online', ws.redis_obj._id);
         pub.publish('users:disconnect', str);
-        redis_obj = undefined;
+        ws.redis_obj = undefined;
       }
     });
+
+    // updates the online users in redis
+    
   });
 
   console.log("WebSockets server listening on port", config.server.port, "– pid:",process.pid)
@@ -153,7 +147,6 @@ var pick = function (user) {
   var deferred = q.defer();
   store.hgetall('user_'+user._id, function (err, obj) {
     if(!err && obj && obj.pid == process.pid) {
-      console.log(user._id, obj.pid, process.pid);
       async.filter(this.clients, function (client, cb) {
         if(client.session && client.session.user) {
           if(user._id.toString() === client.session.user._id.toString()) {
