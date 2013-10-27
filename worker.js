@@ -31,6 +31,10 @@ app.set('port', config.server.port);
 app.set('config', config);
 app.use(express.cors());
 app.use(express.logger('dev'));
+// ping route for load balancer
+app.get('/ping', function (req, res) {
+  res.json(200);
+});
 app.use(express.cookieParser());
 app.use(express.session({
     secret: config.session.secret
