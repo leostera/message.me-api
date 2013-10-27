@@ -6,6 +6,6 @@ if(cluster.isMaster) {
     cluster.fork();
   }
 } else {
-  console.log('Starting worker #', cluster.worker.id);
+  console.log('Starting worker #', cluster.worker.id,'– pid:', process.pid);
   require('./worker');
 }
