@@ -51,7 +51,7 @@ app.use(express.bodyParser());
 app.use(express.methodOverride());
 // require libs as each of them (but utils) are express apps
 app.use(require('./lib/users'));
-// app.use(require('./lib/conversations'));
+app.use(require('./lib/conversations'));
 
 app.use(app.router);
 app.use(function (req, res, next) {
