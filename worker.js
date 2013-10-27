@@ -49,11 +49,11 @@ app.use(passport.initialize());
 app.use(passport.session());
 app.use(express.bodyParser());
 app.use(express.methodOverride());
-app.use(app.router);
 // require libs as each of them (but utils) are express apps
-// app.use(require('./lib/users'));
+app.use(require('./lib/users'));
 // app.use(require('./lib/conversations'));
 
+app.use(app.router);
 app.use(function (req, res, next) {
   res.json(404, {
     error: "Sorry, we do not support that endpoint yet."
