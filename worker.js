@@ -25,7 +25,11 @@ mongoose.connect('mongodb://'
   + ":"+config.db.port
   + "/"+config.db.dbname);
 
-var store = createClient(config.session.store);
+config.session.store.prefix = config.session.store.prefix.text +
+    ( config.session.store.prefix.useEnv
+      ? "_"+process.env.NODE_ENV
+      : '');
+var store = new redisStore(config.session.store);
 
 app.set('port', config.server.port);
 app.set('config', config);
@@ -45,14 +49,14 @@ app.use(passport.initialize());
 app.use(passport.session());
 app.use(express.bodyParser());
 app.use(express.methodOverride());
-
+app.use(app.router);
 // require libs as each of them (but utils) are express apps
-app.use(require('./lib/users'));
-app.use(require('./lib/conversations'));
+// app.use(require('./lib/users'));
+// app.use(require('./lib/conversations'));
 
-app.use(function (err, req, res, next) {
-  res.json(501, {
-    error: err.toString()
+app.use(function (req, res, next) {
+  res.json(404, {
+    error: "Sorry, we do not support that endpoint yet."
   });
 });
 app.use(express.errorHandler());
