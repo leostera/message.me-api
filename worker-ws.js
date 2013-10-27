@@ -15,15 +15,15 @@ module.exports = io = {};
 // app dependencies
 
 var config   = global.config;
-var createClient = require('./lib/utils/redis').createClient;
+var redis = require('redis');
 
 aws.config.update(config.aws);
 var SQS = new aws.SQS();
 
-var sessionStore = createClient(config.session.store);
-var store   = createClient(config.io.store);
-var pub     = createClient(config.io.store);
-var sub     = createClient(config.io.store);
+var sessionStore = redis.createClient(config.session.store);
+var store   = redis.createClient(config.io.store);
+var pub     = redis.createClient(config.io.store);
+var sub     = redis.createClient(config.io.store);
 
 // Subscribe Redis to allowed channels
 var allowedLabels = config.io.labels;
@@ -32,13 +32,12 @@ allowedLabels.forEach(function (label) {
   sub.subscribe(label);
 });
 
-var wss;
-
 io.sub = sub;
 io.pub = pub;
 
 io.start = function (server) {
-  wss = new ws.Server({server: server});
+  var counter = 0;
+  var wss = new ws.Server({server: server});
 
   wss.broadcast = broadcast;
   wss.sendTo = sendTo;
@@ -50,17 +49,23 @@ io.start = function (server) {
   conversations.register(wss, pub, sub, store);
 
   wss.on('connection', function (ws) {
+    ws.id = counter;
+    counter = counter+1;
+
     var redis_obj;
 
     parseSession(ws)
       .then(function () {
         redis_obj = {
             username: ws.session.user['username'] || ws.session.user['name']
-          , _id: ws.session.user['_id']
+          , _id: ws.session.user._id.toString()
           , status: true
-        };
+          , wsid: ws.id
+          , pid: process.pid
+        }
         var str = JSON.stringify(redis_obj);
-        store.sadd('users_online', str);
+        store.sadd('users_online', redis_obj._id);
+        store.hmset('user_'+redis_obj._id, redis_obj);
         pub.publish('users:connect', str);
       });
 
@@ -83,7 +88,7 @@ io.start = function (server) {
     ws.on('close', function() {
       if(redis_obj) {
         var str = JSON.stringify(redis_obj);
-        store.srem('users_online', str);
+        store.srem('users_online', redis_obj._id);
         pub.publish('users:disconnect', str);
         redis_obj = undefined;
       }
@@ -146,19 +151,31 @@ var sendTo = function (data, user) {
 
 var pick = function (user) {
   var deferred = q.defer();
-  async.each(this.clients, function (client, cb) {
-    if(!client.session || !client.session.user) cb(null);
-    if(user._id.toString() === client.session.user._id.toString()) {
-      cb(this.clients.indexOf(client));
+  async.filter(this.clients, function (client, cb) {
+    if(client.session && client.session.user) {
+      console.log(user._id.toString(),client.session.user._id.toString(),user._id.toString()==client.session.user._id.toString(),user._id.toString()===client.session.user._id.toString());
+      if(user._id.toString() === client.session.user._id.toString()) {
+        cb(true);
+      } else {
+        console.log("client has a different user", user, client.session && client.session.user);
+        cb(false);
+      }
     } else {
-      cb(null);
+      console.log("client doesn't have a session or user", client.session && client.session.user);
+      cb(false);
     }
-  }.bind(this), function (id) {
-    if(id) {
-      deferred.resolve(id);
+  }.bind(this), function (client) {
+    if(client.length === 1) {
+      var id = this.clients.indexOf(client[0]);
+      console.log("found user:",user._id.toString(),"– pid:",process.pid,"– socket:",id);
+      deferred.resolve(client[0]);
+    } else if (client.length > 1) {
+      console.log("jeez, more than one socket in this pid with that user!", process.pid, user._id);
+      deferred.reject();
     } else {
+      console.log("not in this pid", process.pid);
       deferred.reject();
     }
-  });
+  }.bind(this));
   return deferred.promise;
 }
