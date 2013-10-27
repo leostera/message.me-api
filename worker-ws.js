@@ -3,8 +3,9 @@
  */
 var q = require('q');
 var ws = require('ws');
-var express = require('express');
 var aws = require('aws-sdk');
+var async = require('async');
+var express = require('express');
 
 /**
  *  Expose the server.
@@ -13,13 +14,13 @@ module.exports = io = {};
 
 // app dependencies
 
-var config   = global.config = require('./config');
+var config   = global.config;
 var createClient = require('./lib/utils/redis').createClient;
 
 aws.config.update(config.aws);
 var SQS = new aws.SQS();
 
-var sessionStore   = createClient(config.session.store);
+var sessionStore = createClient(config.session.store);
 var store   = createClient(config.io.store);
 var pub     = createClient(config.io.store);
 var sub     = createClient(config.io.store);
@@ -107,11 +108,11 @@ var parseSession = function (ws) {
   } else {
     express.cookieParser(config.session.secret)(ws.upgradeReq, null, function(err) {
       var sessionID = ws.upgradeReq.signedCookies['connect.sid'];
-      sessionStore.get(sessionID, function (err, session) {
+      sessionStore.get(config.session.store.prefix+sessionID, function (err, session) {
         if(err) {
           deferred.reject();
         }
-        ws.session = session || false;
+        ws.session = JSON.parse(session) || false;
         if(ws.session && ws.session.user) {
           deferred.resolve()
         } else {
