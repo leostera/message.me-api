@@ -63,7 +63,7 @@ io.crunch = function () {
     return previous+current;
   }) / table.length;
 
-  var str = "==============================="
+  var str = "===============================\n"
       +"Sent "+table.length+" messages\n"
       +"Max: "+max+"ms\n"
       +"Min: "+min+"ms\n"
