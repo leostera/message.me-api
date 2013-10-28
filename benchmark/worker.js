@@ -147,25 +147,24 @@ worker.work = function () {
 	    	});
 	    	socket.on('open', function (argument) {
 	    		console.log("pid:",process.pid,"– connected socket");
+	    		getUsers(cookie)
+		    		.then(getConversation)
+		    		.then(function (opt) {
+		    			async.whilst(function () {
+		    				return messageNumber < 25;
+		    			}, function (cb) {
+		    				sendMessage(opt)
+		    					.then(cb);
+		    			}, function (err) {
+		    				var end = Date.now()
+			    			console.log("pid:",process.pid,"– sent",messageNumber,"in about",end-start,"ms");
+			    			// process.exit(1);
+		    			});
+		    		});
 	    	});
 	    	socket.on('error', function (err) {
 	    		console.log("pid:",process.pid,"– socket error:", err);
 	    	});
-	    	
-	    	getUsers(cookie)
-	    		.then(getConversation)
-	    		.then(function (opt) {
-	    			async.whilst(function () {
-	    				return messageNumber < 25;
-	    			}, function (cb) {
-	    				sendMessage(opt)
-	    					.then(cb);
-	    			}, function (err) {
-	    				var end = Date.now()
-		    			console.log("pid:",process.pid,"– sent",messageNumber,"in about",end-start,"ms");
-		    			// process.exit(1);
-	    			});
-	    		});
 	    });
 	});
 
@@ -317,5 +316,5 @@ function randomize (array)
 function pickUsersAtRandom (users) {
 	// make sure we don't go over the limit of users or under 1
 	var number = (Math.floor(Math.random()*users.length)+1)%users.length;
-	return randomize(users).splice(0, 10);
+	return randomize(users).splice(0, number);
 }
