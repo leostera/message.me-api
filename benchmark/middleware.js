@@ -25,9 +25,7 @@ module.exports = middleware = {};
 // send a mark to the server
 
 middleware.send = function (markname) {
-	if(!socket) {
-		connect();
-	} else {
+	if(socket.readyState === 1) {
 		var mark = {
 			mark: markname,
 			time: Date.now()
