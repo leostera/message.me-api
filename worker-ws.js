@@ -78,7 +78,6 @@ io.start = function (server) {
     ws.on('close', function() {
       if(ws.redis_obj) {
         var str = JSON.stringify(ws.redis_obj);
-        console.log("Disconnecting user", ws.redis_obj._id);
         store.srem('users_online', ws.redis_obj._id);
         pub.publish('users:disconnect', str);
         ws.redis_obj = undefined;
@@ -160,7 +159,6 @@ var pick = function (user) {
       }.bind(this), function (client) {
         if(client.length === 1) {
           var id = this.clients.indexOf(client[0]);
-          console.log("found user:",user._id.toString(),"– pid:",process.pid,"– socket:",id);
           deferred.resolve(client[0]);
         } else if (client.length > 1) {
           deferred.reject();
