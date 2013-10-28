@@ -63,11 +63,19 @@ io.crunch = function () {
     return previous+current;
   }) / table.length;
 
+  var median = table.sort();
+  if(median.length % 2 === 1){
+    median = median[Math.floor(median.length/2)];
+  } else {
+    median = (median[Math.floor(median.length/2)-1]+median[Math.floor(median.length/2)])/2;
+  }
+
   var str = "===============================\n"
       +"Sent "+table.length+" messages\n"
       +"Max: "+max+"ms\n"
       +"Min: "+min+"ms\n"
-      +"Avg: "+average+"ms";
+      +"Avg: "+average+"ms\n"
+      +"Med: "+median+"ms"
 
   console.log(str);
 
