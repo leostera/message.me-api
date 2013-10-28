@@ -27,14 +27,14 @@ module.exports = middleware = {};
 middleware.send = function (markname) {
 	if(!socket) {
 		connect();
+	} else {
+		var mark = {
+			mark: markname,
+			time: Date.now()
+		};
+		console.log('Sending mark',mark);
+		socket.send(JSON.stringify(mark));
 	}
-	if(!socket) {
-		return;
-	}
-	socket.send(JSON.stringify({
-		mark: markname,
-		time: Date.now()
-	}));
 };
 
 // connect middleware to send a mark
