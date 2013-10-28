@@ -5,10 +5,14 @@
     "apiUrl": "halo_api.leostera.com"
   },
 
-  "sockets": {
+  "benchmark": {
+    "host": "localhost",
+    "port": 9090,
+    "time": 10000,
     "store": {
       "host": "",
       "port": "6379",
+      "prefix": "",
       "key": ""
     }
   },
@@ -18,8 +22,7 @@
     "secretAccessKey": "",
     "region": "",
     "awsAccountId": "",
-    "queuePrefix": "",
-    "alarmPrefix": ""
+    "queuePrefix": ""
   },
 
   "auth": {
@@ -38,6 +41,7 @@
   },
 
   "io": {
+    "pingAlive": "",
     "labels": [
       "users:online",
       "users:connect",
