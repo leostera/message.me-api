@@ -107,14 +107,12 @@ worker.getRandomAccount = function () {
 		];
 }
 
-worker.work = function () {
+worker.work = function (id) {
 	var start = Date.now();
 	var messageNumber = 0;
-	console.log("pid:",process.pid,"– started");
+	console.log("pid:",process.pid,"– started worker #",id);
 
-	var socket;
-
-	var account = this.getRandomAccount()
+	var account = this.accounts[id%this.accounts.length];
 
 	var data = querystring.stringify({
 				access_token: account.access_token
@@ -140,31 +138,33 @@ worker.work = function () {
 	      str+=chunk;
 	    });
 	    res.on('end', function () {
-	    	socket = new ws('ws://'+config.server.apiUrl+':'+config.server.port, {
-	    		headers: {
-	    			'Cookie': cookie
-	    		}
-	    	});
-	    	socket.on('open', function (argument) {
-	    		console.log("pid:",process.pid,"– connected socket");
-	    		getUsers(cookie)
-		    		.then(getConversation)
-		    		.then(function (opt) {
-		    			async.whilst(function () {
-		    				return messageNumber < 25;
-		    			}, function (cb) {
-		    				sendMessage(opt)
-		    					.then(cb);
-		    			}, function (err) {
-		    				var end = Date.now()
-			    			console.log("pid:",process.pid,"– sent",messageNumber,"in about",end-start,"ms");
-			    			// process.exit(1);
-		    			});
-		    		});
-	    	});
-	    	socket.on('error', function (err) {
-	    		console.log("pid:",process.pid,"– socket error:", err);
-	    	});
+	    	(function createSocket() {
+		    	var socket = new ws('ws://'+config.server.wsUrl+':'+config.server.port, {
+		    		headers: {
+		    			'Cookie': cookie
+		    		}
+		    	});
+		    	socket.on('open', function (argument) {
+		    		console.log("pid:",process.pid,"– connected socket");
+		    		getUsers(cookie)
+			    		.then(getConversation)
+			    		.then(function (opt) {
+			    			async.whilst(function () {
+			    				return messageNumber < 10;
+			    			}, function (cb) {
+			    				sendMessage(opt)
+			    					.then(cb);
+			    			}, function (err) {
+			    				var end = Date.now()
+				    			console.log("pid:",process.pid,"– sent",messageNumber,"in about",end-start,"ms");
+				    			// process.exit(1);
+			    			});
+			    		});
+		    	});
+		    	socket.on('error', function (err) {
+		    		console.log("pid:",process.pid,"– socket error:", err);
+		    	});
+		    }());
 	    });
 	});
 
@@ -315,6 +315,6 @@ function randomize (array)
 
 function pickUsersAtRandom (users) {
 	// make sure we don't go over the limit of users or under 1
-	var number = (Math.floor(Math.random()*users.length)+1)%users.length;
-	return randomize(users).splice(0, number);
+	var number = (Math.floor(Math.random()*users.length)+1)%8;
+	return randomize(users).splice(0, 1);
 }
