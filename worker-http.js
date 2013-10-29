@@ -34,7 +34,7 @@ mongoose.connect('mongodb://'
 app.set('port', config.server.port);
 app.set('config', config);
 app.use(express.cors());
-// app.use(express.logger('dev'));
+app.use(express.logger('dev'));
 // ping route for load balancer
 app.get('/ping', function (req, res) {
   res.json(200);
