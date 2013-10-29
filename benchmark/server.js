@@ -42,7 +42,8 @@ io.start = function () {
 }
 
 
-io.crunch = function () {
+io.crunch = function (prefix, data) {
+
   var table = Object.keys(data).map(function (key) {
     if(data[key].length < 2) return;
     var time = data[key][1] - data[key][0];
@@ -70,7 +71,7 @@ io.crunch = function () {
     median = (median[Math.floor(median.length/2)-1]+median[Math.floor(median.length/2)])/2;
   }
 
-  var str = "===============================\n"
+  var str = "============"+prefix+"============\n"
       +"Sent "+table.length+" messages\n"
       +"Max: "+max+"ms\n"
       +"Min: "+min+"ms\n"
@@ -86,4 +87,20 @@ io.crunch = function () {
  *  Startup the server.
  */
 io.start();
-setInterval(io.crunch, config.benchmark.time);
+setInterval(function () {
+  var ws = [];
+  var post = [];
+  var ctgm = [];
+  Object.keys(data).forEach(function  (key) {
+    if(/^ws-/.test(key)) {
+      ws.push(data[key]);
+    } else if (/^post-/.test(key)) {
+      post.push(data[key]);
+    } else {
+      ctgm.push(data[key]);
+    }
+  })
+  io.crunch("WebSockets",ws);
+  io.crunch("POST",post);
+  io.crunch("Calls to getMessages",ctgm);
+}, config.benchmark.time);
